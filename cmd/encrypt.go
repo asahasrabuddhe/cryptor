@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"fmt"
+	"encoding/hex"
 	"os"
 
 	"eminentcodex/cryptor/module"
@@ -9,15 +9,15 @@ import (
 )
 
 var (
-	FilePath  string
-	PlainText string
-	Key       string
+	filePath  string
+	plainText string
+	key       string
 )
 
 func init() {
-	encrypt.Flags().StringVarP(&FilePath, "filepath", "f", "", "Path to file of whose content need to be encrypted")
-	encrypt.Flags().StringVarP(&PlainText, "text", "t", "", "Plain text that need to be encrypted")
-	encrypt.Flags().StringVarP(&Key, "key", "k", "", "Key that is required to encrypt the text")
+	encrypt.Flags().StringVarP(&filePath, "filepath", "f", "", "Path to file of whose content need to be encrypted")
+	encrypt.Flags().StringVarP(&plainText, "text", "t", "", "Plain text that need to be encrypted")
+	encrypt.Flags().StringVarP(&key, "key", "k", "", "key that is required to encrypt the text")
 	encrypt.MarkFlagRequired("key")
 	rootCmd.AddCommand(encrypt)
 }
@@ -30,21 +30,42 @@ var encrypt = &cobra.Command{
 		var (
 			content []byte
 			err     error
+			encoded []byte
+			fp      *os.File
 		)
 
-		if FilePath == "" && PlainText == "" {
+		if key == "" {
+			module.WriteToExit(os.Stdout, "Please provide a key")
+		}
+
+		if filePath == "" && plainText == "" {
 			module.WriteToExit(os.Stdout, "Please provide either filepath or plain text to encrypt")
 		}
 
-		if FilePath != "" {
-			if content, err = module.GetFileContent(FilePath); err != nil {
+		if filePath != "" {
+			if content, err = module.GetFileContent(filePath); err != nil {
 				module.WriteToExit(os.Stdout, err.Error())
 			}
 		} else {
-			content = []byte(PlainText)
+			content = []byte(plainText)
 		}
 
-		fmt.Println(PlainText, content)
+		encoded, err = module.AESCBCEncrypt(content, []byte(key))
+		if err != nil {
+			module.WriteToExit(os.Stdout, err.Error())
+		}
+		if filePath != "" {
+			// write to file
+			fp, err = os.OpenFile(filePath, os.O_RDWR, 0777)
+			if err != nil {
+				module.WriteToExit(os.Stdout, err.Error())
+			}
 
+			fp.WriteString(hex.EncodeToString(encoded))
+
+			os.Exit(0)
+		} else {
+			module.WriteTo(os.Stdout, hex.EncodeToString(encoded))
+		}
 	},
 }
